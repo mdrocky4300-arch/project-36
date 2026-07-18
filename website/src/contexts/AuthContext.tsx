@@ -5,15 +5,17 @@ import {
     User, 
     onAuthStateChanged, 
     signOut,
-    GoogleAuthProvider,
-    signInWithPopup
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    updateProfile
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    loginWithGoogle: () => Promise<void>;
+    loginWithEmail: (email: string, password: string) => Promise<void>;
+    registerWithEmail: (email: string, password: string, displayName: string) => Promise<void>;
     logout: () => Promise<void>;
 }
 
@@ -41,22 +43,45 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return unsubscribe;
     }, []);
 
-    const loginWithGoogle = async () => {
+    const loginWithEmail = async (email: string, password: string) => {
         if(auth.app.options.apiKey === "placeholder-api-key") {
-            alert("ℹ️ Mock mode: Using test credentials. Replace .env.local with real Firebase credentials to enable Google login.");
+            alert("ℹ️ Demo mode: Auto-logging in with test account.");
             return;
         }
-        const provider = new GoogleAuthProvider();
         try {
-            await signInWithPopup(auth, provider);
+            await signInWithEmailAndPassword(auth, email, password);
         } catch (error: any) {
-            if (error.code === "auth/popup-blocked") {
-                alert("🔒 Popup blocked! Please allow popups for this site or check your browser settings.");
-            } else if (error.code === "auth/configuration-not-found") {
-                alert("⚠️ Firebase not configured. Add real credentials to .env.local");
+            if (error.code === "auth/user-not-found") {
+                throw new Error("No account found with this email. Please sign up first.");
+            } else if (error.code === "auth/wrong-password") {
+                throw new Error("Incorrect password. Please try again.");
+            } else if (error.code === "auth/invalid-email") {
+                throw new Error("Invalid email address.");
+            } else if (error.code === "auth/too-many-requests") {
+                throw new Error("Too many failed login attempts. Try again later.");
             } else {
-                console.error("Error signing in with Google:", error.message);
-                alert("Login failed: " + (error.message || "Unknown error"));
+                throw new Error(error.message || "Login failed. Please try again.");
+            }
+        }
+    };
+
+    const registerWithEmail = async (email: string, password: string, displayName: string) => {
+        if(auth.app.options.apiKey === "placeholder-api-key") {
+            alert("ℹ️ Demo mode: Creating test account.");
+            return;
+        }
+        try {
+            const result = await createUserWithEmailAndPassword(auth, email, password);
+            await updateProfile(result.user, { displayName });
+        } catch (error: any) {
+            if (error.code === "auth/email-already-in-use") {
+                throw new Error("Email already registered. Please log in instead.");
+            } else if (error.code === "auth/weak-password") {
+                throw new Error("Password is too weak. Use at least 6 characters.");
+            } else if (error.code === "auth/invalid-email") {
+                throw new Error("Invalid email address.");
+            } else {
+                throw new Error(error.message || "Signup failed. Please try again.");
             }
         }
     };
@@ -71,7 +96,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout }}>
+        <AuthContext.Provider value={{ user, loading, loginWithEmail, registerWithEmail, logout }}>
             {!loading ? children : <div className="min-h-screen flex items-center justify-center text-white bg-gray-900">Loading...</div>}
         </AuthContext.Provider>
     );
