@@ -26,9 +26,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Fallback for placeholder api key
-        if(auth.app.options.apiKey === "placeholder-api-key") {
-            setUser({ uid: "mock-user", displayName: "Mock User" } as User);
+        // Demo mode: Use mock user for testing
+        const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+        if(isDemoMode || auth.app.options.apiKey === "placeholder-api-key") {
+            setUser({ uid: "demo-user-123", displayName: "Demo User", email: "demo@example.com" } as User);
             setLoading(false);
             return;
         }
@@ -41,12 +42,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const loginWithGoogle = async () => {
-        if(auth.app.options.apiKey === "placeholder-api-key") return;
+        if(auth.app.options.apiKey === "placeholder-api-key") {
+            alert("ℹ️ Mock mode: Using test credentials. Replace .env.local with real Firebase credentials to enable Google login.");
+            return;
+        }
         const provider = new GoogleAuthProvider();
         try {
             await signInWithPopup(auth, provider);
-        } catch (error) {
-            console.error("Error signing in with Google", error);
+        } catch (error: any) {
+            if (error.code === "auth/popup-blocked") {
+                alert("🔒 Popup blocked! Please allow popups for this site or check your browser settings.");
+            } else if (error.code === "auth/configuration-not-found") {
+                alert("⚠️ Firebase not configured. Add real credentials to .env.local");
+            } else {
+                console.error("Error signing in with Google:", error.message);
+                alert("Login failed: " + (error.message || "Unknown error"));
+            }
         }
     };
 
